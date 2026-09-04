@@ -79,6 +79,7 @@ read -p "Press [ENTER] once you have added the key to GitHub to continue..."
 # Set global git config
 git config --global user.name "$GIT_NAME"
 git config --global user.email "$GIT_EMAIL"
+git config --global push.autoSetupRemote true
 
 # GitHub CLI Auth Check
 if ! gh auth status &>/dev/null; then

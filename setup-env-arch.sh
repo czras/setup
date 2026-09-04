@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-# Resolve the user dynamically from /etc/environment or active session
+# Resolve script directory dynamically (works regardless of current working directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 TARGET_USER="${WSL_DEV_USER:-$(whoami)}"
 USER_HOME=$(eval echo "~$TARGET_USER")
 
@@ -12,7 +14,7 @@ echo "==> Upgrading system and installing core packages..."
 sudo pacman -S --needed --noconfirm \
     base-devel nano nano-syntax-highlighting less tinyxxd \
     git tk xorg-fonts-100dpi openssh curl wget unzip zip \
-    jq ripgrep fd fzf tree sqlite github-cli mise uv
+    jq ripgrep fd fzf tree sqlite github-cli mise uv sops age
 
 echo 'include "/usr/share/nano/*.nanorc"' | sudo tee -a /etc/nanorc > /dev/null
 echo 'include "/usr/share/nano/extra/*.nanorc"' | sudo tee -a /etc/nanorc > /dev/null
@@ -62,25 +64,61 @@ fi
 echo "==> Installing OpenCode..."
 paru -S --needed --noconfirm wish opencode-bin
 
-# 5. Interactive Secret Collection
+# 5. SOPS + Age Encrypted Secret Setup
 mkdir -p "$USER_HOME/.config/opencode"
-ENV_FILE="$USER_HOME/.config/opencode/env"
+mkdir -p "$USER_HOME/.config/sops/age"
+
+AGE_KEY_FILE="$USER_HOME/.config/sops/age/keys.txt"
+ENC_FILE="$USER_HOME/.config/opencode/opencode.env.enc"
+TMP_ENV="/tmp/opencode_setup.env"
 
 echo ""
-echo "=== API Key Configuration ==="
-echo "Press Enter to skip any key you do not want to configure."
+echo "=== Encrypted API Key Configuration (SOPS + Age) ==="
+
+if [ ! -f "$AGE_KEY_FILE" ]; then
+    echo "==> Generating new Age key pair at $AGE_KEY_FILE..."
+    age-keygen -o "$AGE_KEY_FILE"
+    chmod 600 "$AGE_KEY_FILE"
+fi
+
+PUBKEY=$(age-keygen -y "$AGE_KEY_FILE")
+echo "Using Age Public Key: $PUBKEY"
+
+declare -A CURRENT_KEYS
+if [ -f "$ENC_FILE" ]; then
+    echo "==> Found existing encrypted file. Decrypting defaults..."
+    eval "$(SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" sops --decrypt --input-type dotenv --output-type dotenv "$ENC_FILE" 2>/dev/null)" || true
+    CURRENT_KEYS["ANTHROPIC_API_KEY"]="$ANTHROPIC_API_KEY"
+    CURRENT_KEYS["GITHUB_PAT"]="$GITHUB_PAT"
+    CURRENT_KEYS["GEMINI_API_KEY"]="$GEMINI_API_KEY"
+    CURRENT_KEYS["DEEPSEEK_API_KEY"]="$DEEPSEEK_API_KEY"
+    CURRENT_KEYS["GROQ_API_KEY"]="$GROQ_API_KEY"
+    CURRENT_KEYS["KILO_API_KEY"]="$KILO_API_KEY"
+    CURRENT_KEYS["ORCAROUTER_API_KEY"]="$ORCAROUTER_API_KEY"
+    CURRENT_KEYS["AION_API_KEY"]="$AION_API_KEY"
+    CURRENT_KEYS["SAMBANOVA_API_KEY"]="$SAMBANOVA_API_KEY"
+fi
 
 prompt_key() {
     local var_name=$1
     local prompt_text=$2
-    read -sp "$prompt_text: " value
+    local current_val="${CURRENT_KEYS[$var_name]}"
+    local display_default=""
+
+    if [ -n "$current_val" ]; then
+        display_default=" [Current: ${current_val:0:6}...${current_val: -4}]"
+    fi
+
+    read -sp "$prompt_text$display_default (Press Enter to keep current): " value
     echo ""
-    if [ -n "$value" ]; then
-        echo "export $var_name=\"$value\"" >> "$ENV_FILE"
+
+    local final_val="${value:-$current_val}"
+    if [ -n "$final_val" ]; then
+        echo "$var_name=\"$final_val\"" >> "$TMP_ENV"
     fi
 }
 
-> "$ENV_FILE" # Reset env file
+> "$TMP_ENV"
 prompt_key "ANTHROPIC_API_KEY" "Enter Anthropic (Claude) API Key"
 prompt_key "GITHUB_PAT" "Enter GitHub PAT (MCP & GitHub Models)"
 prompt_key "GEMINI_API_KEY" "Enter Gemini API Key"
@@ -91,124 +129,28 @@ prompt_key "ORCAROUTER_API_KEY" "Enter OrcaRouter API Key"
 prompt_key "AION_API_KEY" "Enter Aion API Key"
 prompt_key "SAMBANOVA_API_KEY" "Enter SambaNova API Key"
 
-chmod 600 "$ENV_FILE"
+if [ -s "$TMP_ENV" ]; then
+    SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" sops --encrypt \
+        --age "$PUBKEY" \
+        --input-type dotenv \
+        --output-type dotenv \
+        "$TMP_ENV" > "$ENC_FILE"
+    chmod 600 "$ENC_FILE"
+    echo "==> Encrypted credentials saved to $ENC_FILE"
+fi
+rm -f "$TMP_ENV"
 
-# 6. Filtered OpenCode Configuration
-echo "==> Writing $USER_HOME/.config/opencode/opencode.jsonc..."
-cat <<'EOF' > "$USER_HOME/.config/opencode/opencode.jsonc"
-{
-  "$schema": "https://opencode.ai/config.json",
-  "catalog": {
-    "disableDefaultProviders": true
-  },
-  "mcp": {
-    "github": {
-      "type": "remote",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "enabled": true,
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer {env:GITHUB_PAT}"
-      }
-    }
-  },
-  "provider": {
-    "anthropic": {
-      "options": {
-        "apiKey": "{env:ANTHROPIC_API_KEY}"
-      },
-      "models": {
-        "claude-3-5-sonnet-20241022": { "name": "Claude 3.5 Sonnet" }
-      }
-    },
-    "openrouter": {
-      "models": {
-        "openrouter/free": { "name": "OpenRouter Free model router" }
-      }
-    },
-    "google": {
-      "options": {
-        "apiKey": "{env:GEMINI_API_KEY}"
-      },
-      "models": {
-        "gemini-3.7-flash": { "name": "Gemini 3.7 Flash [free]" },
-        "gemini-3.6-flash": { "name": "Gemini 3.6 Flash [free]" },
-        "gemini-3.1-pro-preview": { "name": "Gemini 3.1 Pro (Preview) [free]" }
-      }
-    },
-    "deepseek": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "DeepSeek",
-      "options": {
-        "baseURL": "https://deepseek.com",
-        "apiKey": "{env:DEEPSEEK_API_KEY}"
-      },
-      "models": {
-        "deepseek-v4-pro": { "name": "DeepSeek V4 Pro [free]" },
-        "deepseek-v4-flash": { "name": "DeepSeek V4 Flash [free]" }
-      }
-    },
-    "kilocode": {
-      "options": {
-        "baseURL": "https://kilo.ai",
-        "apiKey": "{env:KILO_API_KEY}"
-      },
-      "models": {
-        "nemotron-3-ultra-free": { "name": "Nemotron 3 Ultra [free]" },
-        "step-3.7-flash-free": { "name": "Step 3.7 Flash [free]" },
-        "ling-flash-free": { "name": "Ling Flash [free]" }
-      }
-    },
-    "orcarouter": {
-      "options": {
-        "baseURL": "https://orcarouter.ai",
-        "apiKey": "{env:ORCAROUTER_API_KEY}"
-      },
-      "models": {
-        "orcarouter/free": { "name": "OrcaRouter Free Auto-Route" }
-      }
-    },
-    "aionlabs": {
-      "options": {
-        "baseURL": "https://aionlabs.ai",
-        "apiKey": "{env:AION_API_KEY}"
-      },
-      "models": {
-        "aion-2.5-free": { "name": "Aion 2.5 [free]" }
-      }
-    },
-    "groq": {
-      "options": {
-        "baseURL": "https://groq.com",
-        "apiKey": "{env:GROQ_API_KEY}"
-      },
-      "models": {
-        "llama-3.3-70b-versatile": { "name": "Llama 3.3 70B Versatile [free]" },
-        "gemma-2-9b-it": { "name": "Gemma 2 9B IT [free]" }
-      }
-    },
-    "github": {
-      "options": {
-        "baseURL": "https://azure.com",
-        "apiKey": "{env:GITHUB_PAT}"
-      },
-      "models": {
-        "gpt-4o-mini": { "name": "GPT-4o Mini (GitHub) [free]" },
-        "meta-llama-3.1-70b-instruct": { "name": "Llama 3.1 70B (GitHub) [free]" }
-      }
-    },
-    "sambanova": {
-      "options": {
-        "baseURL": "https://sambanova.ai",
-        "apiKey": "{env:SAMBANOVA_API_KEY}"
-      },
-      "models": {
-        "llama-3.1-405b-instruct": { "name": "Llama 3.1 405B Instruct [free]" }
-      }
-    }
-  }
-}
-EOF
+# 6. Copy OpenCode Configuration File
+CONFIG_SRC="$SCRIPT_DIR/config/opencode.jsonc"
+CONFIG_DEST="$USER_HOME/.config/opencode/opencode.jsonc"
+
+if [ -f "$CONFIG_SRC" ]; then
+    echo "==> Copying $CONFIG_SRC to $CONFIG_DEST..."
+    cp "$CONFIG_SRC" "$CONFIG_DEST"
+else
+    echo "Error: Configuration file not found at $CONFIG_SRC!" >&2
+    exit 1
+fi
 
 # 7. Shell profile configuration
 BASHRC="$USER_HOME/.bashrc"
@@ -218,14 +160,27 @@ if ! grep -q "opencode-agent" "$BASHRC"; then
 export VISUAL=nano
 export EDITOR=nano
 eval "$(mise activate bash)"
-source ~/.config/opencode/env
 
 opencode-agent() {
-  GIT_AUTHOR_NAME="OpenCode" \
-  GIT_AUTHOR_EMAIL="andras.czigany.13+agent@gmail.com" \
-  GIT_COMMITTER_NAME="OpenCode" \
-  GIT_COMMITTER_EMAIL="andras.czigany.13+agent@gmail.com" \
-  opencode "$@"
+    local age_key="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
+    local enc_file="$HOME/.config/opencode/opencode.env.enc"
+
+    if [ ! -f "$age_key" ]; then
+        echo "Error: Age key not found at $age_key" >&2
+        return 1
+    fi
+
+    if [ ! -f "$enc_file" ]; then
+        echo "Error: Encrypted credentials file not found at $enc_file" >&2
+        return 1
+    fi
+
+    env $(SOPS_AGE_KEY_FILE="$age_key" sops --decrypt --input-type dotenv --output-type dotenv "$enc_file") \
+        GIT_AUTHOR_NAME="OpenCode" \
+        GIT_AUTHOR_EMAIL="andras.czigany.13+agent@gmail.com" \
+        GIT_COMMITTER_NAME="OpenCode" \
+        GIT_COMMITTER_EMAIL="andras.czigany.13+agent@gmail.com" \
+        opencode "$@"
 }
 EOF
 fi

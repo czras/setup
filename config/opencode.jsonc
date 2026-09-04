@@ -1,0 +1,112 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "catalog": {
+    "disableDefaultProviders": true
+  },
+  "mcp": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_PAT}"
+      }
+    }
+  },
+  "provider": {
+    "anthropic": {
+      "options": {
+        "apiKey": "{env:ANTHROPIC_API_KEY}"
+      },
+      "models": {
+        "claude-3-5-sonnet-20241022": { "name": "Claude 3.5 Sonnet" }
+      }
+    },
+    "openrouter": {
+      "models": {
+        "openrouter/free": { "name": "OpenRouter Free model router" }
+      }
+    },
+    "google": {
+      "options": {
+        "apiKey": "{env:GEMINI_API_KEY}"
+      },
+      "models": {
+        "gemini-3.7-flash": { "name": "Gemini 3.7 Flash [free]" },
+        "gemini-3.6-flash": { "name": "Gemini 3.6 Flash [free]" },
+        "gemini-3.1-pro-preview": { "name": "Gemini 3.1 Pro (Preview) [free]" }
+      }
+    },
+    "deepseek": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepSeek",
+      "options": {
+        "baseURL": "https://deepseek.com",
+        "apiKey": "{env:DEEPSEEK_API_KEY}"
+      },
+      "models": {
+        "deepseek-v4-pro": { "name": "DeepSeek V4 Pro [free]" },
+        "deepseek-v4-flash": { "name": "DeepSeek V4 Flash [free]" }
+      }
+    },
+    "kilocode": {
+      "options": {
+        "baseURL": "https://kilo.ai",
+        "apiKey": "{env:KILO_API_KEY}"
+      },
+      "models": {
+        "nemotron-3-ultra-free": { "name": "Nemotron 3 Ultra [free]" },
+        "step-3.7-flash-free": { "name": "Step 3.7 Flash [free]" },
+        "ling-flash-free": { "name": "Ling Flash [free]" }
+      }
+    },
+    "orcarouter": {
+      "options": {
+        "baseURL": "https://orcarouter.ai",
+        "apiKey": "{env:ORCAROUTER_API_KEY}"
+      },
+      "models": {
+        "orcarouter/free": { "name": "OrcaRouter Free Auto-Route" }
+      }
+    },
+    "aionlabs": {
+      "options": {
+        "baseURL": "https://aionlabs.ai",
+        "apiKey": "{env:AION_API_KEY}"
+      },
+      "models": {
+        "aion-2.5-free": { "name": "Aion 2.5 [free]" }
+      }
+    },
+    "groq": {
+      "options": {
+        "baseURL": "https://groq.com",
+        "apiKey": "{env:GROQ_API_KEY}"
+      },
+      "models": {
+        "llama-3.3-70b-versatile": { "name": "Llama 3.3 70B Versatile [free]" },
+        "gemma-2-9b-it": { "name": "Gemma 2 9B IT [free]" }
+      }
+    },
+    "github": {
+      "options": {
+        "baseURL": "https://azure.com",
+        "apiKey": "{env:GITHUB_PAT}"
+      },
+      "models": {
+        "gpt-4o-mini": { "name": "GPT-4o Mini (GitHub) [free]" },
+        "meta-llama-3.1-70b-instruct": { "name": "Llama 3.1 70B (GitHub) [free]" }
+      }
+    },
+    "sambanova": {
+      "options": {
+        "baseURL": "https://sambanova.ai",
+        "apiKey": "{env:SAMBANOVA_API_KEY}"
+      },
+      "models": {
+        "llama-3.1-405b-instruct": { "name": "Llama 3.1 405B Instruct [free]" }
+      }
+    }
+  }
+}

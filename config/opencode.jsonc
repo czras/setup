@@ -24,6 +24,9 @@
       }
     },
     "openrouter": {
+      "options": {
+        "apiKey": "{env:OPENROUTER_API_KEY}"
+      },
       "models": {
         "openrouter/free": { "name": "OpenRouter Free model router" }
       }

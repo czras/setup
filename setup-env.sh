@@ -118,7 +118,6 @@ corepack prepare pnpm@latest --activate
 mise use --global node@24
 mise use --global python@3.14
 
-uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v1.0.0
 uv tool update-shell
 
 # 5. SOPS + Age Encrypted Secret Setup

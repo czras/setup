@@ -3,4 +3,5 @@ git@github.com:czras/andrasczigany-com.git
 git@github.com:czras/kalenjin-mind-blog.git
 git@github.com:czras/setup.git
 git@github.com:czras/sinew.git
+git@github.com:czras/teslamate-deploy.git
 https://github.com/threadwright-org/threadwright.git

@@ -1,0 +1,2 @@
+# Repositories to clone into ~/workspace
+# git@github.com:your-user/your-private-repo.git

@@ -1,6 +1,6 @@
 # Arch WSL2 Dev Environment Setup
 
-A modular bootstrap system to spin up isolated Arch Linux WSL2 containers and provision a developer environment with zero unencrypted credentials stored on disk.
+A modular bootstrap system to spin up isolated Arch Linux WSL2 containers, provision developer tools, and manage API keys securely with zero unencrypted credentials stored on disk.
 
 ---
 
@@ -9,9 +9,13 @@ A modular bootstrap system to spin up isolated Arch Linux WSL2 containers and pr
 ```text
 .
 ├── setup-wsl.ps1        # PowerShell script to create fresh Arch WSL2 instances
-├── setup.sh             # In-container Arch setup script
+├── setup-env.sh         # Distro-agnostic launcher & orchestrator
 ├── config/
-│   └── opencode.jsonc   # OpenCode configuration template
+│   ├── git.env          # Git user name and email configuration
+│   ├── opencode.jsonc   # OpenCode configuration template
+│   └── repos.txt        # List of Git repository URLs to clone
+├── scripts/
+│   └── arch.sh          # Arch Linux-specific package management & AUR tasks
 └── secrets/
     └── opencode.env.enc # SOPS-encrypted API credentials (tracked in Git)
 
@@ -26,7 +30,7 @@ The PowerShell bootstrapper creates a clean, isolated Arch Linux WSL instance wi
 ### Prerequisites (Windows)
 
 * WSL2 enabled (`wsl --install` executed at least once on Windows).
-* PowerShell 5.1 or higher executed as an Administrator or standard user with WSL rights.
+* PowerShell 5.1 or higher.
 
 ### Execution
 
@@ -54,32 +58,58 @@ wsl -d dev-arch
 
 ---
 
-## Part 2: Security & Credentials Management
+## Part 2: Configuration Before Setup
 
-This setup uses **SOPS** and **Age** to manage API keys. Credentials are checked into Git inside `secrets/opencode.env.enc` encrypted with an Age public key.
+Before running the environment setup script, customize your configuration files in the `config/` directory.
 
-### Security Model
+### 1. Git Identity (`config/git.env`)
 
-* **Encryption Key:** Your Age private key lives at `~/.config/sops/age/keys.txt`.
-* **Zero On-Disk Exposure:** API keys are never written in plain text to files like `.env` or sourced into `~/.bashrc`.
-* **Runtime Injection:** The `opencode-agent` function decrypts `opencode.env.enc` directly into memory for the duration of process execution.
+Set your default Git commit name and email address:
+
+```bash
+GIT_NAME="Your Name"
+GIT_EMAIL="your.email@example.com"
+AGENT_EMAIL="your.email+agent@example.com"
+
+```
+
+### 2. Workspace Repositories (`config/repos.txt`)
+
+List the Git repository URLs you want cloned into `~/workspace/`. Comments starting with `#` and empty lines are ignored:
+
+```text
+# Repositories to clone into ~/workspace
+https://github.com/github/spec-kit.git
+# git@github.com:your-user/your-private-repo.git
+
+```
 
 ---
 
-## Part 3: Running the Container Setup (`setup.sh`)
+## Part 3: Security & Credentials Model
+
+This setup uses **SOPS** and **Age** to manage API keys safely.
+
+* **Age Private Key Location:** `~/.config/sops/age/keys.txt`
+* **Zero On-Disk Exposure:** API keys are decrypted into memory at runtime and never saved in plain text files like `.env` or sourced directly in `~/.bashrc`.
+* **Runtime Injection:** The `opencode-agent` wrapper function decrypts `opencode.env.enc` directly into process memory during execution.
+
+---
+
+## Part 4: Running the Environment Setup (`setup-env.sh`)
 
 Clone or copy this repository into your new WSL instance.
 
 ```bash
 git clone git@github.com:czras/setup.git ~/wsl-setup
 cd ~/wsl-setup
-chmod +x setup-env-arch.sh
+chmod +x setup-env.sh
 
 ```
 
-### Step 3.1: (Optional) Restore Existing Age Private Key
+### Step 4.1: (Optional) Restore Existing Age Private Key
 
-If you already have an Age private key backed up (e.g., in a password manager or Windows host folder), copy it into place **before** running `setup.sh`. This allows the script to automatically decrypt and load your existing secrets as default values:
+If you already have an Age private key backed up, copy it into place **before** running the setup script. This enables automatic decryption of existing encrypted secrets:
 
 ```bash
 mkdir -p ~/.config/sops/age
@@ -88,49 +118,64 @@ chmod 600 ~/.config/sops/age/keys.txt
 
 ```
 
-> **Note:** If `~/.config/sops/age/keys.txt` is missing, `setup.sh` will generate a new Age key pair automatically.
+> **Note:** If `keys.txt` is not found, `setup-env.sh` automatically generates a new key pair.
 
-### Step 3.2: Execute Setup
+### Step 4.2: Execute Setup
 
 ```bash
-./setup.sh
+./setup-env.sh
 
 ```
 
-### Setup Execution Workflow
+---
 
-1. **System Provisioning:** Updates Arch, configures locales, and installs core CLI tools (`mise`, `uv`, `sops`, `age`, `github-cli`, `paru`, `opencode-bin`).
-2. **Age Key Handling:**
-* Checks for an existing Age key at `~/.config/sops/age/keys.txt`.
-* Generates a new key pair if missing.
+## What `setup-env.sh` Executing Does
 
-
-3. **Interactive Secret Prompt:**
-* If an existing `keys.txt` is found and an encrypted secrets file exists, `setup.sh` decrypts it to load current values.
-* Prompts for missing/updated API keys showing masked defaults (`[Current: sk-ant...1234]`).
-* Pressing **Enter** retains the current value.
+1. **Distro Module Invocation:** Inspects `/etc/os-release` and executes `scripts/arch.sh` to handle package installations (`pacman`), locales, and AUR helper setups (`paru`).
+2. **SSH Key Generation & GitHub Authorization:**
+* Generates a new ED25519 key pair if missing.
+* Prints the public key to the terminal.
+* **Pauses execution** with an interactive prompt, allowing you to copy the key to your [GitHub Settings](https://github.com/settings/keys) before proceeding.
 
 
-4. **Encryption & Output:** Encrypts the values with Age via SOPS and writes to `~/.config/opencode/opencode.env.enc`.
-5. **Configuration Copy:** Copies `config/opencode.jsonc` to `~/.config/opencode/opencode.jsonc`.
-6. **Shell Integration:** Appends the `opencode-agent` wrapper function to `~/.bashrc`.
+3. **Workspace Provisioning:**
+* Creates `~/workspace/`.
+* Parses `config/repos.txt` and batch clones specified repositories.
+
+
+4. **Toolchain & Runtimes Configuration:**
+* Configures `mise` for version management (Node.js, Python).
+* Sets up `corepack` (`pnpm`) and `uv` CLI extensions.
+
+
+5. **Interactive Secret Management (SOPS + Age):**
+* Decrypts existing secrets (if an Age key is present) to populate defaults.
+* Prompts for missing or updated API keys with masked feedback (`[Current: sk-ant...1234]`).
+* Encrypts and writes the result to `~/.config/opencode/opencode.env.enc`.
+
+
+6. **Shell & Agent Setup:**
+* Copies `config/opencode.jsonc` to `~/.config/opencode/opencode.jsonc`.
+* Configures `~/.bashrc` with the `opencode-agent` executable function.
+
+
 
 ---
 
-## Part 4: Usage
+## Part 5: Usage
 
-Restart your shell or reload configuration:
+Reload your shell environment:
 
 ```bash
 source ~/.bashrc
 
 ```
 
-Run OpenCode via the wrapper:
+Launch OpenCode via the agent wrapper:
 
 ```bash
 opencode-agent
 
 ```
 
-The wrapper automatically decrypts `opencode.env.enc` into memory, injects your provider keys into environment variables, overrides Git author metadata for agent commits, and launches `opencode`.
+The wrapper function decrypts API keys in memory, sets designated agent commit author variables, and launches `opencode`.

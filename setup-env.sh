@@ -95,7 +95,8 @@ REPOS_FILE="$SCRIPT_DIR/config/repos.txt"
 if [ -f "$REPOS_FILE" ]; then
     echo "==> Processing workspace repositories from $REPOS_FILE..."
     while IFS= read -r repo_url || [ -n "$repo_url" ]; do
-        repo_url="$(echo "$repo_url" | xargs)"
+        # Strip carriage returns (\r) and trim whitespace
+        repo_url="$(echo "$repo_url" | tr -d '\r' | xargs)"
         [[ -z "$repo_url" || "$repo_url" =~ ^# ]] && continue
 
         repo_name=$(basename "$repo_url" .git)
@@ -113,7 +114,10 @@ fi
 # 4. Universal Development Runtimes
 echo "==> Configuring runtime managers (mise & corepack)..."
 eval "$(mise activate bash)"
-corepack enable
+mkdir -p ~/.local/bin
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+corepack enable --install-directory ~/.local/bin
 corepack prepare pnpm@latest --activate
 mise use --global node@24
 mise use --global python@3.14

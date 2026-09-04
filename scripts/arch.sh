@@ -8,7 +8,8 @@ echo "==> Upgrading system and installing core packages via pacman..."
 sudo pacman -S --needed --noconfirm \
     base-devel nano nano-syntax-highlighting less tinyxxd \
     git tk xorg-fonts-100dpi openssh curl wget unzip zip \
-    jq ripgrep fd fzf tree sqlite github-cli mise uv sops age
+    jq ripgrep fd fzf tree sqlite github-cli mise uv sops age \
+    corepack
 
 echo 'include "/usr/share/nano/*.nanorc"' | sudo tee -a /etc/nanorc > /dev/null
 echo 'include "/usr/share/nano/extra/*.nanorc"' | sudo tee -a /etc/nanorc > /dev/null

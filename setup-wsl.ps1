@@ -34,13 +34,18 @@ Remove-Item $tarPath -Force
 
 Write-Host "[4/5] Initializing base user ('$username')..." -ForegroundColor Cyan
 wsl -d $targetName -u root -- bash -c @"
+pacman-key --init
+pacman-key --populate archlinux
 pacman -Syu --noconfirm sudo git base-devel
 useradd -m -G wheel -s /bin/bash $username
+passwd $username
 echo '%wheel ALL=(ALL:ALL) ALL' >> /etc/sudoers
 echo 'WSL_DEV_USER=$username' >> /etc/environment
 cat <<EOF > /etc/wsl.conf
 [user]
 default=$username
+[interop]
+appendWindowsPath = false
 EOF
 "@
 

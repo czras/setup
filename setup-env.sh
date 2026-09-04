@@ -127,6 +127,11 @@ mkdir -p "$USER_HOME/.config/sops/age"
 AGE_KEY_FILE="$USER_HOME/.config/sops/age/keys.txt"
 ENC_FILE="$USER_HOME/.config/opencode/opencode.env.enc"
 TMP_ENV="/tmp/opencode_setup.env"
+REPO_OPENCODE_CONFIG_ENV_FILE="$SCRIPT_DIR/config/opencode.env.enc"
+REPO_AGE_KEY_FILE="$SCRIPT_DIR/config/keys.txt"
+
+yes | cp -f $REPO_OPENCODE_CONFIG_ENV_FILE $ENC_FILE 2>/dev/null || true
+yes | cp -f $REPO_AGE_KEY_FILE $AGE_KEY_FILE 2>/dev/null || true
 
 echo ""
 echo "=== Encrypted API Key Configuration (SOPS + Age) ==="
